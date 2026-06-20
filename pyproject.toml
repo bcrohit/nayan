@@ -1,13 +1,17 @@
 [project]
 name = "nayan"
-version = "0.2.0"
-description = "Minimal on-demand IP camera snapshot proxy"
+version = "0.3.0"
+description = "Assistive navigation service with camera capture, vision guidance, and TTS"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "edge-tts>=6.1.0",
     "fastapi>=0.115.0",
+    "groq>=0.13.0",
     "httpx>=0.28.0",
+    "pillow>=10.0.0",
     "pydantic-settings>=2.6.0",
+    "pydub>=0.25.1",
     "uvicorn[standard]>=0.32.0",
 ]
 

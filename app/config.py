@@ -1,6 +1,7 @@
 """Application configuration from environment variables."""
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -14,6 +15,22 @@ class Settings(BaseSettings):
         validation_alias="CAMERA_URL",
     )
     timeout_seconds: float = Field(default=3.0, validation_alias="TIMEOUT_SECONDS", gt=0)
+
+    groq_api_key: str | None = Field(default=None, validation_alias="GROQ_API_KEY")
+    groq_model: str = Field(
+        default="meta-llama/llama-4-scout-17b-16e-instruct",
+        validation_alias="GROQ_MODEL",
+    )
+    navigation_prompt_file: str = Field(
+        default="navigation.md",
+        validation_alias="NAVIGATION_PROMPT_FILE",
+    )
+    image_max_dimension: int = Field(default=512, validation_alias="IMAGE_MAX_DIMENSION", ge=64)
+    image_rotate_degrees: int = Field(default=90, validation_alias="IMAGE_ROTATE_DEGREES", ge=0)
+
+    tts_voice: str = Field(default="en-US-JennyNeural", validation_alias="TTS_VOICE")
+    tts_rate: float = Field(default=0.5, validation_alias="TTS_RATE", gt=0)
+    tts_cache_dir: Path = Field(default=Path("/tmp/nayan_tts_cache"), validation_alias="TTS_CACHE_DIR")
 
 
 @lru_cache
