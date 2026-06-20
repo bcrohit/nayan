@@ -147,7 +147,7 @@ async def navigate(
         speech_text=str(result.get("speech_text", "")),
     )
 
-    if speak and guidance.speech_text:
+    if speak and guidance.speech_text and guidance.action.upper() != "CONTINUE":
         tts = _tts(request)
         if tts.is_ready:
             tts.speak(guidance.speech_text, guidance.action)

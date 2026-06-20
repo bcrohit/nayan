@@ -69,12 +69,25 @@ def test_describe_returns_guidance(client: TestClient, monkeypatch: pytest.Monke
 
 
 def test_navigate_with_speech(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    app.state.vision.describe = AsyncMock(
+        return_value={"action": "TURN_LEFT", "speech_text": "Turn left now."}
+    )
     monkeypatch.setattr(app.state.camera, "get_snapshot", AsyncMock(return_value=b"\xff\xd8\xff\xd9"))
 
     response = client.get("/navigate?speak=true")
 
     assert response.status_code == 200
-    app.state.tts.speak.assert_called_once_with("Path is clear.", "CONTINUE")
+    app.state.tts.speak.assert_called_once_with("Turn left now.", "TURN_LEFT")
+
+
+def test_navigate_continue_skips_speech(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(app.state.camera, "get_snapshot", AsyncMock(return_value=b"\xff\xd8\xff\xd9"))
+
+    response = client.get("/navigate?speak=true")
+
+    assert response.status_code == 200
+    assert response.json() == {"action": "CONTINUE", "speech_text": "Path is clear."}
+    app.state.tts.speak.assert_not_called()
 
 
 def test_speak_queues_request(client: TestClient) -> None:
