@@ -19,6 +19,16 @@ from groq import Groq
 from PIL import Image
 import requests
 
+from text_to_speech import TTSEngine
+# import tts/
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 # --- Setup ---
 load_dotenv()
 
@@ -41,11 +51,11 @@ MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
 # exposes two endpoints:
 #   POST /capture/start  -> tells it to start grabbing frames on an interval
 #   GET  /frame/latest   -> returns the most recent captured frame as raw bytes
-CAPTURE_START_URL = "http://localhost:8000/capture/start"
-LATEST_FRAME_URL = "http://localhost:8000/frame/latest"
-CAPTURE_PAYLOAD = {"camera_url": "http://10.111.213.44:8080", "interval_seconds": 5}
+# CAPTURE_START_URL = "http://localhost:8000/capture/start"
+LATEST_FRAME_URL = "http://192.168.103.180:8080/photo.jpg"  # ← YOUR CAMERA SERVICE URL
+# CAPTURE_PAYLOAD = {"camera_url": "http://192.168.103.180:8080", "interval_seconds": 5}
 
-POLL_INTERVAL_SECONDS = 2  # how often WE ask for a new frame + describe it
+POLL_INTERVAL_SECONDS = 1  # how often WE ask for a new frame + describe it
 
 
 def start_capture_service() -> None:
@@ -178,8 +188,12 @@ def describe_image_bytes(image_bytes: bytes) -> tuple[dict, float]:
 def run_live_loop():
     """The assistive-device pipeline: start the capture service once, then
     repeatedly fetch the latest frame and describe it on an interval."""
+    print("\nInitializing TTS engine...")
+    tts = TTSEngine(voice="en-US-AriaNeural", rate=0.95)
+    tts.start()
+    print("✓ TTS engine started\n")
     print("Starting capture service...")
-    start_capture_service()
+    # start_capture_service()
 
     print(f"Polling every {POLL_INTERVAL_SECONDS}s. Press Ctrl+C to stop.\n")
     try:
@@ -189,6 +203,10 @@ def run_live_loop():
                 data, elapsed = describe_image_bytes(frame_bytes)
                 print(f"[{elapsed:.2f}s] action={data.get('action')} | speech_text={data.get('speech_text')}")
                 # TODO: hand off data["speech_text"] to the TTS module here
+                action = data.get("action", "CONTINUE")
+                speech_text = data.get("speech_text", "")
+                if speech_text:
+                    tts.speak(speech_text, action)
             except Exception as e:
                 # Don't let one bad frame/response kill the whole loop —
                 # log it and keep going, since this runs unattended.
@@ -197,6 +215,10 @@ def run_live_loop():
             time.sleep(POLL_INTERVAL_SECONDS)
     except KeyboardInterrupt:
         print("\nStopped.")
+    
+    finally:
+        tts.stop()
+        print("TTS engine stopped.")
 
 
 if __name__ == "__main__":
