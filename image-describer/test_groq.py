@@ -190,7 +190,7 @@ def run_live_loop():
     """The assistive-device pipeline: start the capture service once, then
     repeatedly fetch the latest frame and describe it on an interval."""
     print("\nInitializing TTS engine...")
-    tts = TTSEngine(voice="en-US-AriaNeural", rate=0.95)
+    tts = TTSEngine(voice="en-US-JennyNeural", rate=0.5)
     tts.start()
     print("✓ TTS engine started\n")
     print("Starting capture service...")
@@ -224,6 +224,8 @@ def run_live_loop():
         print("\nStopped.")
     
     finally:
+        print("Waiting for TTS to finish...")
+        time.sleep(2)  # ← Give TTS time to finish playing current audio
         tts.stop()
         print("TTS engine stopped.")
 

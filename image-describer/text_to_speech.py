@@ -318,7 +318,7 @@ class TTSEngine:
             logger.debug(f"Playing {audio_path.name} ({len(sound)}ms)")
 
             # Play in chunks so we can check interrupt flag
-            chunk_duration = 200  # ms
+            chunk_duration = 500  # ms
             for i in range(0, len(sound), chunk_duration):
                 if self.should_interrupt:
                     logger.debug("Playback interrupted")
