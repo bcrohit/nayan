@@ -22,6 +22,7 @@ import requests
 from text_to_speech import TTSEngine
 # import tts/
 import logging
+import time
 
 logging.basicConfig(
     level=logging.INFO,
@@ -70,8 +71,8 @@ def fetch_latest_frame_bytes() -> bytes:
     Note: .content (not the Response object itself) gives the actual
     image bytes — requests.get() returns a Response wrapper, not bytes."""
     response = requests.get(LATEST_FRAME_URL)
-    with open('latest.png',"wb") as f:
-        f.write(response.content)
+    # with open('latest.png',"wb") as f:
+    #     f.write(response.content)
     response.raise_for_status()
     return response.content
 
@@ -199,18 +200,24 @@ def run_live_loop():
     try:
         while True:
             try:
+                st = time.time()
                 frame_bytes = fetch_latest_frame_bytes()
+                print("Time to get image: ", time.time()-st)
                 data, elapsed = describe_image_bytes(frame_bytes)
                 print(f"[{elapsed:.2f}s] action={data.get('action')} | speech_text={data.get('speech_text')}")
                 # TODO: hand off data["speech_text"] to the TTS module here
                 action = data.get("action", "CONTINUE")
                 speech_text = data.get("speech_text", "")
+                st = time.time()
                 if speech_text:
                     tts.speak(speech_text, action)
+                print("Time for TTS:", time.time()-st)
             except Exception as e:
                 # Don't let one bad frame/response kill the whole loop —
                 # log it and keep going, since this runs unattended.
                 print(f"ERROR on this cycle: {e}")
+
+            break
 
             time.sleep(POLL_INTERVAL_SECONDS)
     except KeyboardInterrupt:
