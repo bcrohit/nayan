@@ -19,6 +19,16 @@ from groq import Groq
 from PIL import Image
 import requests
 
+from text_to_speech import TTSEngine
+# import tts/
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 # --- Setup ---
 load_dotenv()
 
@@ -41,18 +51,11 @@ MODEL_NAME = "meta-llama/llama-4-scout-17b-16e-instruct"
 # exposes two endpoints:
 #   POST /capture/start  -> tells it to start grabbing frames on an interval
 #   GET  /frame/latest   -> returns the most recent captured frame as raw bytes
-CAPTURE_START_URL = "http://localhost:8000/capture/start"
-LATEST_FRAME_URL = "http://localhost:8000/frame/latest"
-CAPTURE_PAYLOAD = {"camera_url": "http://10.111.213.44:8080", "interval_seconds": 5}
+LATEST_FRAME_URL = "http://10.111.213.44:8080/photo.jpg"  # ← YOUR CAMERA SERVICE URL
+# CAPTURE_PAYLOAD = {"camera_url": "http://192.168.103.180:8080", "interval_seconds": 5}
 
-POLL_INTERVAL_SECONDS = 2  # how often WE ask for a new frame + describe it
+POLL_INTERVAL_SECONDS = 1  # how often WE ask for a new frame + describe it
 
-
-def start_capture_service() -> None:
-    """Tell the capture service to begin grabbing frames. Call this once,
-    before entering the polling loop — not every iteration."""
-    response = requests.post(CAPTURE_START_URL, json=CAPTURE_PAYLOAD)
-    response.raise_for_status()  # fail loudly if the capture service rejects this
 
 
 def fetch_latest_frame_bytes() -> bytes:
@@ -60,15 +63,16 @@ def fetch_latest_frame_bytes() -> bytes:
     Note: .content (not the Response object itself) gives the actual
     image bytes — requests.get() returns a Response wrapper, not bytes."""
     response = requests.get(LATEST_FRAME_URL)
-    with open('latest.png',"wb") as f:
+    with open('latest.png', "wb") as f:
         f.write(response.content)
     response.raise_for_status()
     return response.content
 
+
 # Same prompt as test_gemini.py, so results are directly comparable.
 PROMPT = """
 You are assisting a blind person navigating their environment using a camera
-that takes a photo every 10 seconds. Analyze the image and respond with ONLY
+that takes a photo every 1 seconds. Analyze the image and respond with ONLY
 a JSON object (no markdown, no extra text) with exactly these fields:
 
 {
@@ -98,7 +102,7 @@ Decision rules:
 # Resize before sending — large camera-resolution images get internally
 # tiled/processed in more detail than needed, which adds latency. The model
 # doesn't need full resolution to judge "is there space to pass."
-MAX_DIMENSION = 512  # pixels, longest side
+MAX_DIMENSION = 320  # pixels, longest side
 
 
 def rotate_image_clockwise(img: Image.Image, degrees: int = 90) -> Image.Image:
@@ -137,16 +141,11 @@ def image_to_data_url(img: Image.Image) -> str:
     return f"data:image/jpeg;base64,{encoded}"
 
 
-def describe_image_bytes(image_bytes: bytes) -> tuple[dict, float]:
+def describe_image_bytes(image_b64) -> tuple[dict, float]:
     """Send raw image bytes to Groq and return (parsed_json_dict, time_taken_seconds).
 
     Takes bytes straight from the capture service, with no file I/O involved.
     """
-    img = Image.open(BytesIO(image_bytes))
-    img = rotate_image_clockwise(img, degrees=90)
-    img.save("latest.png")
-    img = resize_image(img)
-    data_url = image_to_data_url(img)
 
     start = time.time()
     response = client.chat.completions.create(
@@ -156,7 +155,7 @@ def describe_image_bytes(image_bytes: bytes) -> tuple[dict, float]:
                 "role": "user",
                 "content": [
                     {"type": "text", "text": PROMPT},
-                    {"type": "image_url", "image_url": {"url": data_url}},
+                    {"type": "image_url", "image_url": {"url": image_b64}},
                 ],
             }
         ],
@@ -178,25 +177,53 @@ def describe_image_bytes(image_bytes: bytes) -> tuple[dict, float]:
 def run_live_loop():
     """The assistive-device pipeline: start the capture service once, then
     repeatedly fetch the latest frame and describe it on an interval."""
+    print("\nInitializing TTS engine...")
+    tts = TTSEngine(voice="en-US-AriaNeural", rate=0.95)
+    tts.start()
+    print("✓ TTS engine started\n")
     print("Starting capture service...")
-    start_capture_service()
+    # start_capture_service()
 
     print(f"Polling every {POLL_INTERVAL_SECONDS}s. Press Ctrl+C to stop.\n")
     try:
         while True:
             try:
+                st = time.time()
                 frame_bytes = fetch_latest_frame_bytes()
-                data, elapsed = describe_image_bytes(frame_bytes)
+                print("Image from Webcam: ", time.time() -st)
+
+                st = time.time()
+                img = Image.open(BytesIO(frame_bytes))
+                img = rotate_image_clockwise(img, degrees=90)
+                img.save("latest.png")
+                img = resize_image(img)
+                image_b64 = image_to_data_url(img)
+                print("Resize duration: ", time.time() -st)
+
+                data, elapsed = describe_image_bytes(image_b64)
                 print(f"[{elapsed:.2f}s] action={data.get('action')} | speech_text={data.get('speech_text')}")
                 # TODO: hand off data["speech_text"] to the TTS module here
+                action = data.get("action", "CONTINUE")
+                speech_text = data.get("speech_text", "")
+                st = time.time()
+
+                if speech_text:
+                    tts.speak(speech_text, action)
+                print("Speech from Text: ", time.time() -st)
+
             except Exception as e:
                 # Don't let one bad frame/response kill the whole loop —
                 # log it and keep going, since this runs unattended.
                 print(f"ERROR on this cycle: {e}")
 
             time.sleep(POLL_INTERVAL_SECONDS)
+            break
     except KeyboardInterrupt:
         print("\nStopped.")
+
+    finally:
+        tts.stop()
+        print("TTS engine stopped.")
 
 
 if __name__ == "__main__":
