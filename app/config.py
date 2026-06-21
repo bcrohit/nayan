@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     tts_rate: float = Field(default=0.5, validation_alias="TTS_RATE", gt=0)
     tts_cache_dir: Path = Field(default=Path("/tmp/nayan_tts_cache"), validation_alias="TTS_CACHE_DIR")
 
+    api_base_url: str = Field(default="http://127.0.0.1:8000", validation_alias="API_BASE_URL")
+    poll_interval_seconds: float = Field(default=2.0, validation_alias="POLL_INTERVAL_SECONDS", gt=0)
+    navigate_client_timeout_seconds: float = Field(
+        default=60.0,
+        validation_alias="NAVIGATE_CLIENT_TIMEOUT_SECONDS",
+        gt=0,
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
