@@ -1,1 +1,0 @@
-"""Nayan image capture pipeline."""
