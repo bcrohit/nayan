@@ -1,0 +1,21 @@
+{
+  "settings_version": "0.0.6",
+  "datasets_dir": "/Users/rohith.chowdappa/Projects/DataScience/nayan/datasets",
+  "weights_dir": "/Users/rohith.chowdappa/Projects/DataScience/nayan/weights",
+  "runs_dir": "/Users/rohith.chowdappa/Projects/DataScience/nayan/runs",
+  "uuid": "a9e24314599cca277460b4dfa6c3726e2ae4353f702505622ab1f937a733cebb",
+  "sync": true,
+  "api_key": "",
+  "openai_api_key": "",
+  "clearml": true,
+  "comet": true,
+  "dvc": true,
+  "hub": true,
+  "mlflow": true,
+  "neptune": true,
+  "raytune": true,
+  "tensorboard": false,
+  "wandb": false,
+  "vscode_msg": true,
+  "openvino_msg": true
+}
