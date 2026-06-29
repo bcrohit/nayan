@@ -1,0 +1,31 @@
+[project]
+name = "nayan"
+version = "0.1.0"
+description = "AI-powered navigation assistant for visually impaired users — Phase 1 trajectory estimation"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+    "pillow>=10.0",
+    "onnxruntime>=1.16",
+    "huggingface_hub>=0.20",
+]
+
+[project.optional-dependencies]
+torch = ["torch>=2.0", "torchvision>=0.15", "transformers>=4.40"]
+dev = ["pytest>=7.0", "ruff>=0.4"]
+
+[project.scripts]
+nayan-trajectory = "nayan.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
