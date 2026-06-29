@@ -6,10 +6,11 @@ import asyncio
 import logging
 import signal
 from contextlib import suppress
+import time
 
 import httpx
 
-from app.config import get_settings
+from config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -58,12 +59,15 @@ async def run_loop() -> None:
 
         while not stop.is_set():
             try:
+                start_time = time.time()
                 guidance = await poll_navigate(client, base_url)
                 logger.info(
                     "action=%s speech=%r",
                     guidance.get("action"),
                     guidance.get("speech_text"),
                 )
+                end_time = time.time()
+                logger.info("Polling cycle completed in %.2f seconds", end_time - start_time)
             except httpx.HTTPStatusError as exc:
                 logger.warning(
                     "Navigation API error %s: %s",
