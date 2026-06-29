@@ -1,74 +1,133 @@
 # Nayan
 
-Assistive navigation backend: fetch camera snapshots, analyze them with a vision LLM, and speak guidance via TTS.
+AI-powered navigation assistant for visually impaired users — research prototype.
+
+**Phase 1 (current):** walking trajectory estimation from egocentric ( chest-level ) video.
+
+## What it does
+
+1. Reads a walking video ( file or webcam ).
+2. Segments walkable surfaces ( road, sidewalk ) with a pretrained SegFormer model ( Cityscapes ).
+3. Extracts a corridor centerline and boundary lines from the walkable mask.
+4. Smooths the path temporally and overlays it on the video.
+
+Future phases will add obstacle detection, distance estimation, prioritization, and LLM-based explanations on top of this pipeline.
 
 ## Architecture
 
 ```
-app/
-├── main.py           # FastAPI app and service lifecycle
-├── config.py         # Environment-based settings
-├── api.py            # HTTP routes
-├── camera_client.py  # IP camera snapshot proxy (httpx)
-├── vision.py         # Groq vision / navigation guidance
-├── tts.py            # Priority TTS worker (edge-tts)
-├── images.py         # Image resize/rotate helpers
-└── prompts.py        # Prompt template loader
-
-assets/prompts/
-└── navigation.md     # Navigation guidance prompt (no hardcoded prompts in code)
+video input
+    → WalkableRegionDetector   (semantic segmentation)
+    → TrajectoryEstimator      (corridor centerline + boundaries)
+    → TrajectorySmoother       (temporal EMA)
+    → TrajectoryVisualizer     (overlay on frame)
 ```
 
+Modules are split so later stages can plug in without rewriting Phase 1:
+
+| Module | Role | Future use |
+|--------|------|------------|
+| `perception/` | Walkable surface detection | Obstacle detection |
+| `trajectory/` | Path estimation & smoothing | Distance along path |
+| `visualization/` | Frame overlay | Debug / mobile preview |
+| `types.py` | Shared dataclasses | LLM context payloads |
+
 ## Setup
+
+Requires Python 3.10+. Uses ONNX Runtime by default (no PyTorch install needed).
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e .
 ```
 
-Install ffmpeg for audio playback (required by pydub):
-
-- macOS: `brew install ffmpeg`
-- Linux: `sudo apt install ffmpeg`
-
-Create a `.env` file:
-
-```env
-CAMERA_URL=http://192.168.1.25:8080/photo.jpg
-TIMEOUT_SECONDS=3
-GROQ_API_KEY=your_groq_api_key
-GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
-TTS_VOICE=en-US-JennyNeural
-TTS_RATE=0.5
-```
-
-## Run
+Optional GPU / PyTorch backend:
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+pip install -e ".[torch]"
+nayan-trajectory video.mp4 --backend torch --device cuda
 ```
 
-API docs: http://localhost:8000/docs
+First run downloads SegFormer ONNX weights (~15 MB) from Hugging Face.
 
-## Endpoints
+## Usage
 
-| Endpoint | Description |
-|---|---|
-| `GET /health` | Service, camera, vision, and TTS status |
-| `GET /snapshot` | Raw JPEG bytes from the IP camera |
-| `GET /describe` | Camera snapshot → Groq navigation JSON |
-| `GET /navigate?speak=true` | Describe + optionally queue TTS |
-| `POST /speak` | Queue `{ "text": "...", "action": "STOP" }` for speech |
-
-Example polling loop (every ~2 seconds):
+Process a video file and show a live preview:
 
 ```bash
-curl "http://localhost:8000/navigate?speak=true"
+nayan-trajectory path/to/walking_video.mp4 --display
 ```
 
-## Tests
+Save annotated output without a window:
 
 ```bash
-pytest
+nayan-trajectory path/to/walking_video.mp4 -o output.mp4
 ```
+
+Webcam ( device index 0 ):
+
+```bash
+nayan-trajectory 0 --display
+```
+
+Quick test on first 60 frames:
+
+```bash
+nayan-trajectory path/to/walking_video.mp4 --max-frames 60 -o preview.mp4
+```
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `--display` | Show OpenCV preview window ( default when no `-o` ) |
+| `-o`, `--output` | Save annotated MP4 |
+| `--max-frames N` | Limit frames processed |
+| `--backend onnx` | Segmentation backend (`onnx` default, or `torch`) |
+| `--inference-width 512` | Segmentation input size; lower = faster |
+| `--device cuda` | Force GPU inference (torch backend, or ONNX CUDA provider) |
+| `--no-mask` | Hide green walkable overlay; show trajectory lines only |
+
+Press `q` or `Esc` to quit the preview.
+
+## Visualization legend
+
+- **Green tint** — detected walkable region
+- **Green center line** — estimated walking trajectory
+- **Orange boundary lines** — corridor edges
+- **Orange dot** — estimated vanishing point ( perspective hint )
+
+## Performance notes
+
+- SegFormer-B0 at 512 px typically reaches interactive rates on CPU with ONNX Runtime.
+- Use `--backend torch --device cuda` for faster GPU inference when PyTorch is installed.
+- The pipeline is single-threaded; batching and TensorRT are future optimizations.
+
+## Project layout
+
+```
+src/nayan/
+  cli.py                 # CLI entry point
+  pipeline.py            # Orchestrates perception → trajectory → viz
+  types.py               # Shared data structures
+  perception/
+    walkable_onnx.py       # SegFormer ONNX walkable-region detector (default)
+    walkable_torch.py      # Optional PyTorch SegFormer backend
+    walkable_common.py     # Shared Cityscapes class constants
+    base.py                # Abstract interfaces (incl. future ObstacleDetector)
+  trajectory/
+    estimator.py         # Centerline extraction from mask
+    smoother.py          # Temporal smoothing
+  visualization/
+    overlay.py           # Draw trajectory on frame
+  video/
+    io.py                # Video read / write
+```
+
+## Next steps ( not in Phase 1 )
+
+- Obstacle detection intersecting the trajectory corridor
+- Monocular depth for distance estimation
+- Obstacle prioritization by proximity and path overlap
+- LLM / VLM descriptions for navigation feedback
